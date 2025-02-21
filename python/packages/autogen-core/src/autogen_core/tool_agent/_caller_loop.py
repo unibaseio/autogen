@@ -37,11 +37,12 @@ async def tool_agent_caller_loop(
 
     generated_messages: List[LLMMessage] = []
 
+    print("tool_agent_caller_loop1")
     # Get a response from the model.
     response = await model_client.create(input_messages, tools=tool_schema, cancellation_token=cancellation_token)
     # Add the response to the generated messages.
     generated_messages.append(AssistantMessage(content=response.content, source=caller_source))
-
+    print("tool_agent_caller_loop2")
     # Keep iterating until the model stops generating tool calls.
     while isinstance(response.content, list) and all(isinstance(item, FunctionCall) for item in response.content):
         # Execute functions called by the model by sending messages to tool agent.
@@ -56,9 +57,11 @@ async def tool_agent_caller_loop(
             ],
             return_exceptions=True,
         )
+        print(f"tool_agent_caller_loop3: {response.content}")
         # Combine the results into a single response and handle exceptions.
         function_results: List[FunctionExecutionResult] = []
         for result in results:
+            print("tool_agent_caller_loop4")
             if isinstance(result, FunctionExecutionResult):
                 function_results.append(result)
             elif isinstance(result, ToolException):
@@ -72,7 +75,8 @@ async def tool_agent_caller_loop(
         response = await model_client.create(
             input_messages + generated_messages, tools=tool_schema, cancellation_token=cancellation_token
         )
+        print("tool_agent_caller_loop5")
         generated_messages.append(AssistantMessage(content=response.content, source=caller_source))
-
+    print("tool_agent_caller_loop6")
     # Return the generated messages.
     return generated_messages

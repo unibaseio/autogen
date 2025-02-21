@@ -16,6 +16,8 @@ from autogen_core import (
     MessageContext,
     RoutedAgent,
     SingleThreadedAgentRuntime,
+    FunctionCall,
+    try_get_known_serializers_for_type,
     default_subscription,
     message_handler,
 )
@@ -25,9 +27,13 @@ from autogen_core.models import (
     LLMMessage,
     SystemMessage,
     UserMessage,
+    FunctionExecutionResult,
 )
 from autogen_core.tool_agent import ToolAgent, tool_agent_caller_loop
 from autogen_core.tools import FunctionTool, Tool, ToolSchema
+
+from autogen_ext.runtimes.grpc import GrpcWorkerAgentRuntime
+
 from chess import BLACK, SQUARE_NAMES, WHITE, Board, Move
 from chess import piece_name as get_piece_name
 from pydantic import BaseModel
@@ -46,7 +52,7 @@ class PlayerAgent(RoutedAgent):
         instructions: str,
         model_client: ChatCompletionClient,
         model_context: ChatCompletionContext,
-        tool_schema: List[ToolSchema],
+        tool_schema: List[ToolSchema] | List[Tool],
         tool_agent_type: str,
     ) -> None:
         super().__init__(description=description)
@@ -59,16 +65,19 @@ class PlayerAgent(RoutedAgent):
     @message_handler
     async def handle_message(self, message: TextMessage, ctx: MessageContext) -> None:
         # Add the user message to the model context.
+        print(f"handle message1")
         await self._model_context.add_message(UserMessage(content=message.content, source=message.source))
         # Run the caller loop to handle tool calls.
+        print(f"handle message2")
         messages = await tool_agent_caller_loop(
-            self,
+            caller=self,
             tool_agent_id=self._tool_agent_id,
             model_client=self._model_client,
             input_messages=self._system_messages + (await self._model_context.get_messages()),
             tool_schema=self._tool_schema,
             cancellation_token=ctx.cancellation_token,
         )
+        print(f"handle message3")
         # Add the assistant message to the model context.
         for msg in messages:
             await self._model_context.add_message(msg)
@@ -89,7 +98,7 @@ def validate_turn(board: Board, player: Literal["white", "black"]) -> None:
         raise ValueError("It is not your turn to move. Wait for white to move first.")
 
 
-def get_legal_moves(
+def get_legal_moves_board(
     board: Board, player: Literal["white", "black"]
 ) -> Annotated[str, "A list of legal moves in UCI format."]:
     """Get legal moves for the given player."""
@@ -112,7 +121,7 @@ def get_board(board: Board) -> str:
     return str(board)
 
 
-def make_move(
+def make_move_board(
     board: Board,
     player: Literal["white", "black"],
     thinking: Annotated[str, "Thinking for the move."],
@@ -141,42 +150,36 @@ def make_move(
     return f"Moved {piece_name} ({piece_symbol}) from {SQUARE_NAMES[new_move.from_square]} to {SQUARE_NAMES[new_move.to_square]}."
 
 
-async def chess_game(runtime: AgentRuntime, model_config: Dict[str, Any]) -> None:  # type: ignore
+tool_agent_type = "chess_game_board_tools"
+
+async def board_tool(runtime: AgentRuntime) -> None:  # type: ignore
     """Create agents for a chess game and return the group chat."""
 
     # Create the board.
     board = Board()
 
-    # Create tools for each player.
-    def get_legal_moves_black() -> str:
-        return get_legal_moves(board, "black")
+    def get_legal_moves(role_type: Annotated[str, "Role type: white or black"]) -> str:
+        print("get legal moves")
+        return get_legal_moves_board(board, role_type)
 
-    def get_legal_moves_white() -> str:
-        return get_legal_moves(board, "white")
-
-    def make_move_black(
+    def make_move(
+        role_type: Annotated[str, "Role type: white or black"],
         thinking: Annotated[str, "Thinking for the move"],
         move: Annotated[str, "A move in UCI format"],
     ) -> str:
-        return make_move(board, "black", thinking, move)
-
-    def make_move_white(
-        thinking: Annotated[str, "Thinking for the move"],
-        move: Annotated[str, "A move in UCI format"],
-    ) -> str:
-        return make_move(board, "white", thinking, move)
+        return make_move_board(board, role_type, thinking, move)
 
     def get_board_text() -> Annotated[str, "The current board state"]:
         return get_board(board)
 
-    black_tools: List[Tool] = [
+    chess_tools: List[Tool] = [
         FunctionTool(
-            get_legal_moves_black,
+            get_legal_moves,
             name="get_legal_moves",
             description="Get legal moves.",
         ),
         FunctionTool(
-            make_move_black,
+            make_move,
             name="make_move",
             description="Make a move.",
         ),
@@ -187,14 +190,37 @@ async def chess_game(runtime: AgentRuntime, model_config: Dict[str, Any]) -> Non
         ),
     ]
 
-    white_tools: List[Tool] = [
+    # Register the agents.
+    await ToolAgent.register(
+        runtime,
+        tool_agent_type,
+        lambda: ToolAgent(description="Tool agent for chess game.", tools=chess_tools),
+    )
+
+async def chess_game(typ: str , runtime: AgentRuntime, model_config: Dict[str, Any]) -> None:  # type: ignore
+    """Create agents for a chess game and return the group chat."""
+
+    def get_legal_moves(role_type: Annotated[str, "Role type: white or black"]) -> str:
+        return ""
+
+    def make_move(
+        role_type: Annotated[str, "Role type: white or black"],
+        thinking: Annotated[str, "Thinking for the move"],
+        move: Annotated[str, "A move in UCI format"],
+    ) -> str:
+        return ""
+
+    def get_board_text() -> Annotated[str, "The current board state"]:
+        return ""
+
+    chess_tools: List[Tool] = [
         FunctionTool(
-            get_legal_moves_white,
+            get_legal_moves,
             name="get_legal_moves",
             description="Get legal moves.",
         ),
         FunctionTool(
-            make_move_white,
+            make_move,
             name="make_move",
             description="Make a move.",
         ),
@@ -207,59 +233,46 @@ async def chess_game(runtime: AgentRuntime, model_config: Dict[str, Any]) -> Non
 
     model_client = ChatCompletionClient.load_component(model_config)
 
-    # Register the agents.
-    await ToolAgent.register(
-        runtime,
-        "PlayerBlackToolAgent",
-        lambda: ToolAgent(description="Tool agent for chess game.", tools=black_tools),
-    )
-
-    await ToolAgent.register(
-        runtime,
-        "PlayerWhiteToolAgent",
-        lambda: ToolAgent(description="Tool agent for chess game.", tools=white_tools),
-    )
-
+    ins = "You are a chess player and you play as " + typ + ". Use the tool 'get_board' and 'get_legal_moves' to get the legal moves and 'make_move' to make a move."
+    agentid = "player"+typ
     await PlayerAgent.register(
         runtime,
-        "PlayerBlack",
+        agentid,
         lambda: PlayerAgent(
-            description="Player playing black.",
-            instructions="You are a chess player and you play as black. Use the tool 'get_board' and 'get_legal_moves' to get the legal moves and 'make_move' to make a move.",
+            description="Player playing "+ typ,
+            instructions=ins,
             model_client=model_client,
             model_context=BufferedChatCompletionContext(buffer_size=10),
-            tool_schema=[tool.schema for tool in black_tools],
-            tool_agent_type="PlayerBlackToolAgent",
-        ),
-    )
-
-    await PlayerAgent.register(
-        runtime,
-        "PlayerWhite",
-        lambda: PlayerAgent(
-            description="Player playing white.",
-            instructions="You are a chess player and you play as white. Use the tool 'get_board' and 'get_legal_moves' to get the legal moves and 'make_move' to make a move.",
-            model_client=model_client,
-            model_context=BufferedChatCompletionContext(buffer_size=10),
-            tool_schema=[tool.schema for tool in white_tools],
-            tool_agent_type="PlayerWhiteToolAgent",
+            tool_schema=[tool.schema for tool in chess_tools],
+            tool_agent_type=tool_agent_type,
         ),
     )
 
 
-async def main(model_config: Dict[str, Any]) -> None:
+async def main(typ: str, model_config: Dict[str, Any]) -> None:
     """Main Entrypoint."""
-    runtime = SingleThreadedAgentRuntime()
-    await chess_game(runtime, model_config)
-    runtime.start()
+
+    runtime = GrpcWorkerAgentRuntime('localhost:50060')
+    runtime.add_message_serializer(try_get_known_serializers_for_type(FunctionCall))
+    runtime.add_message_serializer(try_get_known_serializers_for_type(FunctionExecutionResult))
+    runtime.add_message_serializer(try_get_known_serializers_for_type(TextMessage))
+    await runtime.start()
+
+    if typ == "board":
+        await board_tool(runtime)
+    else:
+        await chess_game(typ, runtime , model_config)
+
     # Publish an initial message to trigger the group chat manager to start
     # orchestration.
     # Send an initial message to player white to start the game.
-    await runtime.send_message(
-        TextMessage(content="Game started, white player your move.", source="System"),
-        AgentId("PlayerWhite", "default"),
-    )
-    await runtime.stop_when_idle()
+    if typ == 'board':
+        await runtime.send_message(
+            TextMessage(content="Game started, white player your move.", source="System"),
+            AgentId("playerwhite", "default"),
+        )
+    
+    await runtime.stop_when_signal()
 
 
 if __name__ == "__main__":
@@ -268,13 +281,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-config", type=str, help="Path to the model configuration file.", default="model_config.yml"
     )
+    parser.add_argument(
+        "--role", type=str, help="agent role: black or white", default=""
+    )
+
     args = parser.parse_args()
     if args.verbose:
         logging.basicConfig(level=logging.WARNING)
         logging.getLogger("autogen_core").setLevel(logging.DEBUG)
-        handler = logging.FileHandler("chess_game.log")
+        file_name = "chess_game_" + args.role + ".log"
+        handler = logging.FileHandler(file_name)
         logging.getLogger("autogen_core").addHandler(handler)
 
     with open(args.model_config, "r") as f:
         model_config = yaml.safe_load(f)
-    asyncio.run(main(model_config))
+    asyncio.run(main(args.role, model_config))

@@ -74,6 +74,7 @@ class ToolAgent(RoutedAgent):
             InvalidToolArgumentsException: If the tool arguments are invalid.
             ToolExecutionException: If the tool execution fails.
         """
+        print(f"handle tool: {message}")
         tool = next((tool for tool in self._tools if tool.name == message.name), None)
         if tool is None:
             raise ToolNotFoundException(call_id=message.id, content=f"Error: Tool not found: {message.name}")
@@ -83,9 +84,11 @@ class ToolAgent(RoutedAgent):
                 result = await tool.run_json(args=arguments, cancellation_token=ctx.cancellation_token)
                 result_as_str = tool.return_value_as_string(result)
             except json.JSONDecodeError as e:
+                print(f"handle tool1: {message.id} {e}")
                 raise InvalidToolArgumentsException(
                     call_id=message.id, content=f"Error: Invalid arguments: {message.arguments}"
                 ) from e
             except Exception as e:
+                print(f"handle tool2: {message.id} {e}")
                 raise ToolExecutionException(call_id=message.id, content=f"Error: {e}") from e
         return FunctionExecutionResult(content=result_as_str, call_id=message.id, is_error=False)

@@ -283,6 +283,7 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
             try:
                 message = await self._host_connection.recv()
                 oneofcase = agent_worker_pb2.Message.WhichOneof(message, "message")
+                logger.info("message type: %s", oneofcase)
                 match oneofcase:
                     case "request":
                         task = asyncio.create_task(self._process_request(message.request))
@@ -377,12 +378,14 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
         if self._host_connection is None:
             raise RuntimeError("Host connection is not set.")
         data_type = self._serialization_registry.type_name(message)
+        print(f"send message1: {data_type}")
         with self._trace_helper.trace_block(
             "create", recipient, parent=None, extraAttributes={"message_type": data_type}
         ):
             # create a new future for the result
             future = asyncio.get_event_loop().create_future()
             request_id = await self._get_new_request_id()
+            print(f"send message2: {request_id}")
             self._pending_requests[request_id] = future
             serialized_message = self._serialization_registry.serialize(
                 message, type_name=data_type, data_content_type=JSON_DATA_CONTENT_TYPE
@@ -407,6 +410,7 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
             self._background_tasks.add(task)
             task.add_done_callback(self._raise_on_exception)
             task.add_done_callback(self._background_tasks.discard)
+            print(f"send message3: {request_id}")
             return await future
 
     async def publish_message(
@@ -509,15 +513,19 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
             return str(self._next_request_id)
 
     async def _process_request(self, request: agent_worker_pb2.RpcRequest) -> None:
+        logger.info("_process_request")
         assert self._host_connection is not None
         recipient = AgentId(request.target.type, request.target.key)
         sender: AgentId | None = None
         if request.HasField("source"):
             sender = AgentId(request.source.type, request.source.key)
+            logger.info("Processing request from %s to %s", sender, recipient)
             logging.info(f"Processing request from {sender} to {recipient}")
         else:
+            logger.info("Processing request from unknown to %s", recipient)
             logging.info(f"Processing request from unknown source to {recipient}")
 
+        logger.info("_process_request1")
         # Deserialize the message.
         message = self._serialization_registry.deserialize(
             request.payload.data,
@@ -525,6 +533,7 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
             data_content_type=request.payload.data_content_type,
         )
 
+        logger.info("_process_request2")
         # Get the receiving agent and prepare the message context.
         rec_agent = await self._get_agent(recipient)
         message_context = MessageContext(
@@ -535,8 +544,10 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
             message_id=request.request_id,
         )
 
+        logger.info("_process_request3: %s", rec_agent.id)
         # Call the receiving agent.
         try:
+            logger.info("_process_request3.1.0: %s", rec_agent.id)
             with MessageHandlerContext.populate_context(rec_agent.id):
                 with self._trace_helper.trace_block(
                     "process",
@@ -545,8 +556,12 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
                     attributes={"request_id": request.request_id},
                     extraAttributes={"message_type": request.payload.data_type},
                 ):
+                    logger.info("_process_request3.1.1: %s", rec_agent.id)
                     result = await rec_agent.on_message(message, ctx=message_context)
+                    logger.info("_process_request3.1.2: %s", rec_agent.id)
+                
         except BaseException as e:
+            logger.info("_process_request3.2.0: %s %s", rec_agent.id, str(e))
             response_message = agent_worker_pb2.Message(
                 response=agent_worker_pb2.RpcResponse(
                     request_id=request.request_id,
@@ -554,10 +569,13 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
                     metadata=get_telemetry_grpc_metadata(),
                 ),
             )
+            logger.info("_process_request3.2.1: %s", rec_agent.id)
             # Send the error response.
             await self._host_connection.send(response_message)
+            logger.info("_process_request3.2.2: %s", rec_agent.id)
             return
 
+        logger.info("_process_request4: %s", rec_agent.id)
         # Serialize the result.
         result_type = self._serialization_registry.type_name(result)
         serialized_result = self._serialization_registry.serialize(
@@ -576,7 +594,7 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
                 metadata=get_telemetry_grpc_metadata(),
             )
         )
-
+        logger.info("_process_request5: %s", rec_agent.id)
         # Send the response.
         await self._host_connection.send(response_message)
 

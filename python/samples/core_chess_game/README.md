@@ -7,7 +7,7 @@ An example with two chess player agents that executes its own tools to demonstra
 First, you need a shell with AutoGen core and required dependencies installed.
 
 ```bash
-pip install "autogen-ext[openai,azure]" "chess"
+pip install "autogen-agentchat" "autogen-ext[openai,grpc]" "chess"
 ```
 
 ## Model Configuration
@@ -18,5 +18,12 @@ Use `model_config_template.yml` as a template.
 ## Running the example
 
 ```bash
-python main.py
+# start host
+python run_host.py
+# start player black
+python main.py --verbose --role=black
+# start player white
+python main.py --verbose --role=white
+# start game board
+python main.py --verbose --role=board
 ```
