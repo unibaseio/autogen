@@ -26,4 +26,6 @@ python main.py --verbose --role=black
 python main.py --verbose --role=white
 # start game board
 python main.py --verbose --role=board
+# start web browser in localhost:5000, show chess board
+python app.py
 ```

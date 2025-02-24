@@ -199,3 +199,5 @@ artifacts
 
 # project data
 registry.json
+
+*.svg

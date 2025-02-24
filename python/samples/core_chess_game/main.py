@@ -15,7 +15,6 @@ from autogen_core import (
     DefaultTopicId,
     MessageContext,
     RoutedAgent,
-    SingleThreadedAgentRuntime,
     FunctionCall,
     try_get_known_serializers_for_type,
     default_subscription,
@@ -38,6 +37,7 @@ from chess import BLACK, SQUARE_NAMES, WHITE, Board, Move
 from chess import piece_name as get_piece_name
 from pydantic import BaseModel
 
+import chess.svg
 
 class TextMessage(BaseModel):
     source: str
@@ -86,23 +86,27 @@ class PlayerAgent(RoutedAgent):
         await self.publish_message(TextMessage(content=messages[-1].content, source=self.id.type), DefaultTopicId())
 
 
-def validate_turn(board: Board, player: Literal["white", "black"]) -> None:
+def validate_turn(board: Board, player: Literal["white", "black"]) -> str:
     """Validate that it is the player's turn to move."""
     last_move = board.peek() if board.move_stack else None
     if last_move is not None:
         if player == "white" and board.color_at(last_move.to_square) == WHITE:
-            raise ValueError("It is not your turn to move. Wait for black to move.")
+            return "It is not your turn to move. Wait for black to move."
         if player == "black" and board.color_at(last_move.to_square) == BLACK:
-            raise ValueError("It is not your turn to move. Wait for white to move.")
+            return "It is not your turn to move. Wait for white to move."
     elif last_move is None and player != "white":
-        raise ValueError("It is not your turn to move. Wait for white to move first.")
+        return "It is not your turn to move. Wait for white to move first."
+    
+    return ""
 
 
 def get_legal_moves_board(
     board: Board, player: Literal["white", "black"]
 ) -> Annotated[str, "A list of legal moves in UCI format."]:
     """Get legal moves for the given player."""
-    validate_turn(board, player)
+    res = validate_turn(board, player)
+    if res != "":
+        return res
     legal_moves = list(board.legal_moves)
     if player == "black":
         legal_moves = [move for move in legal_moves if board.color_at(move.from_square) == BLACK]
@@ -130,8 +134,11 @@ def make_move_board(
     """Make a move on the board."""
     validate_turn(board, player)
     new_move = Move.from_uci(move)
-    board.push(new_move)
-
+    try:
+        board.push(new_move)
+    except Exception as e:
+        return f"Invalid move: {move}, reason: {str(e)}"
+    
     # Print the move.
     print("-" * 50)
     print("Player:", player)
@@ -140,8 +147,14 @@ def make_move_board(
     print("Board:")
     print(board.unicode(borders=True))
 
+    svg_board = chess.svg.board(board=board)
+    with open("chessboard.svg", "w") as file:
+        file.write(svg_board)
+
     # Get the piece name.
     piece = board.piece_at(new_move.to_square)
+    if piece is None:
+        return f"Invalid move: {move}"
     assert piece is not None
     piece_symbol = piece.unicode_symbol()
     piece_name = get_piece_name(piece.piece_type)
@@ -157,6 +170,9 @@ async def board_tool(runtime: AgentRuntime) -> None:  # type: ignore
 
     # Create the board.
     board = Board()
+    svg_board = chess.svg.board(board=board)
+    with open("chessboard.svg", "w") as file:
+        file.write(svg_board)
 
     def get_legal_moves(role_type: Annotated[str, "Role type: white or black"]) -> str:
         print("get legal moves")
@@ -242,7 +258,7 @@ async def chess_game(typ: str , runtime: AgentRuntime, model_config: Dict[str, A
             description="Player playing "+ typ,
             instructions=ins,
             model_client=model_client,
-            model_context=BufferedChatCompletionContext(buffer_size=10),
+            model_context=BufferedChatCompletionContext(buffer_size=1),
             tool_schema=[tool.schema for tool in chess_tools],
             tool_agent_type=tool_agent_type,
         ),
@@ -282,7 +298,7 @@ if __name__ == "__main__":
         "--model-config", type=str, help="Path to the model configuration file.", default="model_config.yml"
     )
     parser.add_argument(
-        "--role", type=str, help="agent role: black or white", default=""
+        "--role", type=str, help="agent role: black, white or board", default="board"
     )
 
     args = parser.parse_args()
@@ -295,4 +311,5 @@ if __name__ == "__main__":
 
     with open(args.model_config, "r") as f:
         model_config = yaml.safe_load(f)
+
     asyncio.run(main(args.role, model_config))
