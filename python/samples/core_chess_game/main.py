@@ -78,9 +78,17 @@ class PlayerAgent(RoutedAgent):
             cancellation_token=ctx.cancellation_token,
         )
         print(f"handle message3")
+
+        stop = False
         # Add the assistant message to the model context.
         for msg in messages:
             await self._model_context.add_message(msg)
+            if "Game over" in msg.content: 
+                stop = True
+        
+        if stop:
+            return
+        
         # Publish the final response.
         assert isinstance(messages[-1].content, str)
         await self.publish_message(TextMessage(content=messages[-1].content, source=self.id.type), DefaultTopicId())
@@ -119,11 +127,14 @@ def get_legal_moves_board(
 
     return "Possible moves are: " + ", ".join([move.uci() for move in legal_moves])
 
-
 def get_board(board: Board) -> str:
     """Get the current board state."""
+    if board.is_game_over():
+        outcome = board.outcome()
+        print(f"game outcome: {outcome}")
+        result = "White wins!" if board.result() == "1-0" else "Black wins!" if board.result() == "0-1" else "Draw!"
+        return (f"Game over! Result: {result}")
     return str(board)
-
 
 def make_move_board(
     board: Board,
@@ -163,7 +174,14 @@ def make_move_board(
     return f"Moved {piece_name} ({piece_symbol}) from {SQUARE_NAMES[new_move.from_square]} to {SQUARE_NAMES[new_move.to_square]}."
 
 
-tool_agent_type = "chess_game_board_tools"
+from aip_chain.chain import membase_chain, membase_id
+import os
+membase_task_id = os.getenv('MEMBASE_TASK_ID')
+if not membase_task_id or membase_task_id == "":
+    print("'MEMBASE_TASK_ID' is not set, user defined")
+    raise Exception("'MEMBASE_TASK_ID' is not set, user defined")
+
+tool_agent_type = membase_task_id
 
 async def board_tool(runtime: AgentRuntime) -> None:  # type: ignore
     """Create agents for a chess game and return the group chat."""
@@ -249,13 +267,14 @@ async def chess_game(typ: str , runtime: AgentRuntime, model_config: Dict[str, A
 
     model_client = ChatCompletionClient.load_component(model_config)
 
-    ins = "You are a chess player and you play as " + typ + ". Use the tool 'get_board' and 'get_legal_moves' to get the legal moves and 'make_move' to make a move."
-    agentid = "player"+typ
+    ins = "You are a chess player and you play as " + typ + ". Use the tool 'get_board' and 'get_legal_moves' to get the legal moves and 'make_move' to make a move. Stop response if game is over. "
+ 
+    agentid = membase_id
     await PlayerAgent.register(
         runtime,
         agentid,
         lambda: PlayerAgent(
-            description="Player playing "+ typ,
+            description="Player playing role as: "+ typ,
             instructions=ins,
             model_client=model_client,
             model_context=BufferedChatCompletionContext(buffer_size=1),
@@ -265,8 +284,17 @@ async def chess_game(typ: str , runtime: AgentRuntime, model_config: Dict[str, A
     )
 
 
+from aip_chain.chain import membase_chain, membase_id
+
 async def main(typ: str, model_config: Dict[str, Any]) -> None:
     """Main Entrypoint."""
+
+    membase_chain.register(membase_id)
+    print(f"{membase_id} is register onchain")
+
+    if typ == "board":
+        membase_chain.register(membase_task_id)
+        print(f"{membase_task_id} is register onchain")
 
     runtime = GrpcWorkerAgentRuntime('localhost:50060')
     runtime.add_message_serializer(try_get_known_serializers_for_type(FunctionCall))
@@ -277,15 +305,17 @@ async def main(typ: str, model_config: Dict[str, Any]) -> None:
     if typ == "board":
         await board_tool(runtime)
     else:
-        await chess_game(typ, runtime , model_config)
+        await chess_game(typ, runtime, model_config)
 
     # Publish an initial message to trigger the group chat manager to start
     # orchestration.
     # Send an initial message to player white to start the game.
     if typ == 'board':
+        rolename = input("input role: ")
+
         await runtime.send_message(
             TextMessage(content="Game started, white player your move.", source="System"),
-            AgentId("playerwhite", "default"),
+            AgentId(rolename, "default"),
         )
     
     await runtime.stop_when_signal()

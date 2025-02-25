@@ -12,7 +12,7 @@ async def main():
 
     console = Console()
     console.print(
-        Markdown(f"**`Distributed Host`** is now running and listening for connection at **`{address}`**")
+        Markdown(f"**`Membase Hub`** is now running and listening for connection at **`{address}`**")
     )
     await host.stop_when_signal()
 

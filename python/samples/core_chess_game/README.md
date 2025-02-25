@@ -17,15 +17,41 @@ Use `model_config_template.yml` as a template.
 
 ## Running the example
 
+- MEMBASE_TASK_ID is same
+- MEMBASE_ID is different with each other
+- MEMBASE_ACCOUNT have balance in bnb testnet
+
 ```bash
-# start host
-python run_host.py
-# start player black
-python main.py --verbose --role=black
-# start player white
-python main.py --verbose --role=white
-# start game board
+# start server
+export MEMBASE_ID="<memory uuid>"
+export MEMBASE_ACCOUNT="<memory account>"
+export MEMBASE_SECRET_KEY="<memory secret key>"
+python membase_hub.py
+
+# start game board, wait for palyers
+export MEMBASE_ID="<memory uuid>"
+export MEMBASE_TASK_ID="<this task uuid>"
+export MEMBASE_ACCOUNT="<memory account>"
+export MEMBASE_SECRET_KEY="<memory secret key>"
 python main.py --verbose --role=board
+
+# start player black
+export MEMBASE_ID="<memory uuid>"
+export MEMBASE_TASK_ID="<this task uuid>"
+export MEMBASE_ACCOUNT="<memory account>"
+export MEMBASE_SECRET_KEY="<memory secret key>"
+python main.py --verbose --role=black
+
+# start player white
+export MEMBASE_ID="<memory uuid>"
+export MEMBASE_TASK_ID="<this task uuid>"
+export MEMBASE_ACCOUNT="<memory account>"
+export MEMBASE_SECRET_KEY="<memory secret key>"
+python main.py --verbose --role=white
+
+# start game
+> input white palyer\'s membase_id
+
 # start web browser in localhost:5000, show chess board
 python app.py
 ```

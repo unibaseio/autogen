@@ -123,13 +123,31 @@ class HostConnection:
         self._stub: AgentRpcAsyncStub = stub
         self._client_id = str(uuid.uuid4())
 
+        from aip_auth.auth import buy_auth_onchain, create_auth
+        from aip_chain.chain import membase_id
+        import time
+        import os
+
+        membase_task_id = os.getenv('MEMBASE_TASK_ID')
+        if not membase_task_id or membase_task_id == "":
+            print("'MEMBASE_TASK_ID' is not set, user defined")
+            raise Exception("'MEMBASE_TASK_ID' is not set, user defined")
+
+        buy_auth_onchain(membase_task_id)
+        timestamp = int(time.time())
+        self._time = str(timestamp)
+        signature = create_auth(timestamp)
+        self._sign = signature
+        self._membase_id = membase_id
+        self._task_id = membase_task_id
+
     @property
     def stub(self) -> Any:
         return self._stub
 
     @property
     def metadata(self) -> Sequence[Tuple[str, str]]:
-        return [("client-id", self._client_id)]
+        return [("client-id", self._client_id), ("sign", self._sign), ("timestamp", self._time), ("agent", self._membase_id), ("task", self._task_id)]
 
     @classmethod
     async def from_host_address(

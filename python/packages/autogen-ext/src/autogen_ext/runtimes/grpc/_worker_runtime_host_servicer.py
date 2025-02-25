@@ -40,6 +40,25 @@ async def get_client_id_or_abort(context: grpc.aio.ServicerContext[Any, Any]) ->
 
     return client_id  # type: ignore
 
+from aip_auth.auth import verify_auth
+
+async def verify_client(agent_id: str ,context: grpc.aio.ServicerContext[Any, Any]) -> None:  # type: ignore
+    # The type hint on context.invocation_metadata() is incorrect.
+    
+    metadata = metadata_to_dict(context.invocation_metadata())  # type: ignore
+    if (signature := metadata.get("sign")) is None:
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "sign metadata not found.")
+
+    if (timestamp := metadata.get("timestamp")) is None:
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "timestamp metadata not found.")
+
+    if (task_id := metadata.get("task")) is None:
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "task metadata not found.")
+
+    try:
+        verify_auth(task_id, agent_id, timestamp, signature)
+    except Exception as e:
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
 
 SendT = TypeVar("SendT")
 ReceiveT = TypeVar("ReceiveT")
@@ -118,6 +137,8 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
     ) -> AsyncIterator[agent_worker_pb2.Message]:
         client_id = await get_client_id_or_abort(context)
 
+        print(f"openchannel: {client_id}")
+
         async def handle_callback(message: agent_worker_pb2.Message) -> None:
             await self._receive_message(client_id, message)
 
@@ -145,7 +166,7 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
         context: grpc.aio.ServicerContext[agent_worker_pb2.ControlMessage, agent_worker_pb2.ControlMessage],
     ) -> AsyncIterator[agent_worker_pb2.ControlMessage]:
         client_id = await get_client_id_or_abort(context)
-
+        print(f"opencontrolchannel: {client_id}")
         async def handle_callback(message: agent_worker_pb2.ControlMessage) -> None:
             await self._receive_control_message(client_id, message)
 
@@ -166,16 +187,16 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
         async with self._agent_type_to_client_id_lock:
             agent_types = [agent_type for agent_type, id_ in self._agent_type_to_client_id.items() if id_ == client_id]
             for agent_type in agent_types:
-                logger.info(f"Removing agent type {agent_type} from agent type to client id mapping")
+                logger.warning(f"Removing agent type {agent_type} from agent type to client id mapping")
                 del self._agent_type_to_client_id[agent_type]
             for sub_id in self._client_id_to_subscription_id_mapping.get(client_id, set()):
-                logger.info(f"Client id {client_id} disconnected. Removing corresponding subscription with id {id}")
+                logger.warning(f"Client id {client_id} disconnected. Removing corresponding subscription with id {id}")
                 try:
                     await self._subscription_manager.remove_subscription(sub_id)
                 # Catch and ignore if the subscription does not exist.
                 except ValueError:
                     continue
-        logger.info(f"Client {client_id} disconnected successfully")
+        logger.warning(f"Client {client_id} disconnected successfully")
 
     def _raise_on_exception(self, task: Task[Any]) -> None:
         exception = task.exception()
@@ -292,7 +313,10 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
         ],
     ) -> agent_worker_pb2.RegisterAgentTypeResponse:
         client_id = await get_client_id_or_abort(context)
+         
+        await verify_client(request.type, context)
 
+        print(f"register agent: {client_id} {request.type}")
         async with self._agent_type_to_client_id_lock:
             if request.type in self._agent_type_to_client_id:
                 existing_client_id = self._agent_type_to_client_id[request.type]
@@ -314,6 +338,8 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
     ) -> agent_worker_pb2.AddSubscriptionResponse:
         client_id = await get_client_id_or_abort(context)
 
+        print(f"addsub: {client_id}")
+
         subscription = subscription_from_proto(request.subscription)
         try:
             await self._subscription_manager.add_subscription(subscription)
@@ -331,6 +357,7 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
         ],
     ) -> agent_worker_pb2.RemoveSubscriptionResponse:
         _client_id = await get_client_id_or_abort(context)
+        print(f"removesub: {_client_id}")
         await self._subscription_manager.remove_subscription(request.id)
         return agent_worker_pb2.RemoveSubscriptionResponse()
 
@@ -342,6 +369,7 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
         ],
     ) -> agent_worker_pb2.GetSubscriptionsResponse:
         _client_id = await get_client_id_or_abort(context)
+        print(f"getsub: {_client_id}")
         subscriptions = self._subscription_manager.subscriptions
         return agent_worker_pb2.GetSubscriptionsResponse(
             subscriptions=[subscription_to_proto(sub) for sub in subscriptions]
