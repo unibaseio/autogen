@@ -678,10 +678,12 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
         if is_rpc and not is_marked_rpc_type:
             warnings.warn("Received RPC request with topic type suffix but not marked as RPC request.", stacklevel=2)
 
+        print(f"=== handle cloud message: {recipients} {message}")
         # Send the message to each recipient.
         responses: List[Awaitable[Any]] = []
         for agent_id in recipients:
             if agent_id == sender:
+                print(f"=== no handle self message: {agent_id} {message}")
                 continue
             message_context = MessageContext(
                 sender=sender,

@@ -40,14 +40,14 @@ export MEMBASE_ID="<memory uuid>"
 export MEMBASE_TASK_ID="<this task uuid>"
 export MEMBASE_ACCOUNT="<memory account>"
 export MEMBASE_SECRET_KEY="<memory secret key>"
-python main.py --verbose --role=black
+python main.py --verbose --role=black --control=<board membase_id>
 
 # start player white
 export MEMBASE_ID="<memory uuid>"
 export MEMBASE_TASK_ID="<this task uuid>"
 export MEMBASE_ACCOUNT="<memory account>"
 export MEMBASE_SECRET_KEY="<memory secret key>"
-python main.py --verbose --role=white
+python main.py --verbose --role=white --control=<board membase_id>
 
 # start game
 > input white palyer\'s membase_id

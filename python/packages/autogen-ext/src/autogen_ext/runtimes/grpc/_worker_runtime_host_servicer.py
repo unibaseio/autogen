@@ -10,6 +10,9 @@ from autogen_core import TopicId
 from autogen_core._agent_id import AgentId
 from autogen_core._runtime_impl_helpers import SubscriptionManager
 
+from autogen_core._type_prefix_subscription import TypePrefixSubscription
+from autogen_core._type_subscription import TypeSubscription
+
 from ._constants import GRPC_IMPORT_ERROR_STR
 from ._utils import subscription_from_proto, subscription_to_proto
 
@@ -42,7 +45,7 @@ async def get_client_id_or_abort(context: grpc.aio.ServicerContext[Any, Any]) ->
 
 from aip_auth.auth import verify_auth
 
-async def verify_client(agent_id: str ,context: grpc.aio.ServicerContext[Any, Any]) -> None:  # type: ignore
+async def verify_client(agent_id: str ,context: grpc.aio.ServicerContext[Any, Any]) -> str:  # type: ignore
     # The type hint on context.invocation_metadata() is incorrect.
     
     metadata = metadata_to_dict(context.invocation_metadata())  # type: ignore
@@ -59,6 +62,8 @@ async def verify_client(agent_id: str ,context: grpc.aio.ServicerContext[Any, An
         verify_auth(task_id, agent_id, timestamp, signature)
     except Exception as e:
         await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
+
+    return task_id
 
 SendT = TypeVar("SendT")
 ReceiveT = TypeVar("ReceiveT")
@@ -190,7 +195,7 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
                 logger.warning(f"Removing agent type {agent_type} from agent type to client id mapping")
                 del self._agent_type_to_client_id[agent_type]
             for sub_id in self._client_id_to_subscription_id_mapping.get(client_id, set()):
-                logger.warning(f"Client id {client_id} disconnected. Removing corresponding subscription with id {id}")
+                logger.warning(f"Client id {client_id} disconnected. Removing corresponding subscription with id {sub_id}")
                 try:
                     await self._subscription_manager.remove_subscription(sub_id)
                 # Catch and ignore if the subscription does not exist.
@@ -339,8 +344,18 @@ class GrpcWorkerAgentRuntimeHostServicer(agent_worker_pb2_grpc.AgentRpcServicer)
         client_id = await get_client_id_or_abort(context)
 
         print(f"addsub: {client_id}")
+        
 
         subscription = subscription_from_proto(request.subscription)
+        print(f"addsub: {client_id} {subscription.id}")
+        if isinstance(subscription, TypePrefixSubscription):
+            print(f"addsub: {client_id}, topic: {subscription.topic_type_prefix}, agent: {subscription.agent_type}")
+        if isinstance(subscription, TypeSubscription):
+            task_id = await verify_client(subscription.agent_type, context)
+            if task_id != subscription.topic_type:
+                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "topic is not auth on chain")
+            print(f"addsub: {client_id}, topic: {subscription.topic_type}, agent: {subscription.agent_type}") 
+        
         try:
             await self._subscription_manager.add_subscription(subscription)
             subscription_ids = self._client_id_to_subscription_id_mapping.setdefault(client_id, set())

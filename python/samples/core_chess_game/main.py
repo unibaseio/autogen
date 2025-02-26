@@ -16,6 +16,7 @@ from autogen_core import (
     MessageContext,
     RoutedAgent,
     FunctionCall,
+    TypeSubscription,
     try_get_known_serializers_for_type,
     default_subscription,
     message_handler,
@@ -44,7 +45,15 @@ class TextMessage(BaseModel):
     content: str
 
 
-@default_subscription
+from aip_chain.chain import membase_chain, membase_id
+import os
+membase_task_id = os.getenv('MEMBASE_TASK_ID')
+if not membase_task_id or membase_task_id == "":
+    print("'MEMBASE_TASK_ID' is not set, user defined")
+    raise Exception("'MEMBASE_TASK_ID' is not set, user defined")
+
+tool_agent_type = membase_id
+
 class PlayerAgent(RoutedAgent):
     def __init__(
         self,
@@ -91,7 +100,7 @@ class PlayerAgent(RoutedAgent):
         
         # Publish the final response.
         assert isinstance(messages[-1].content, str)
-        await self.publish_message(TextMessage(content=messages[-1].content, source=self.id.type), DefaultTopicId())
+        await self.publish_message(TextMessage(content=messages[-1].content, source=self.id.type), DefaultTopicId(type=membase_task_id))
 
 
 def validate_turn(board: Board, player: Literal["white", "black"]) -> str:
@@ -173,16 +182,6 @@ def make_move_board(
         piece_name = piece_name.capitalize()
     return f"Moved {piece_name} ({piece_symbol}) from {SQUARE_NAMES[new_move.from_square]} to {SQUARE_NAMES[new_move.to_square]}."
 
-
-from aip_chain.chain import membase_chain, membase_id
-import os
-membase_task_id = os.getenv('MEMBASE_TASK_ID')
-if not membase_task_id or membase_task_id == "":
-    print("'MEMBASE_TASK_ID' is not set, user defined")
-    raise Exception("'MEMBASE_TASK_ID' is not set, user defined")
-
-tool_agent_type = membase_task_id
-
 async def board_tool(runtime: AgentRuntime) -> None:  # type: ignore
     """Create agents for a chess game and return the group chat."""
 
@@ -231,7 +230,7 @@ async def board_tool(runtime: AgentRuntime) -> None:  # type: ignore
         lambda: ToolAgent(description="Tool agent for chess game.", tools=chess_tools),
     )
 
-async def chess_game(typ: str , runtime: AgentRuntime, model_config: Dict[str, Any]) -> None:  # type: ignore
+async def chess_game(typ: str, tool_agent: str, runtime: AgentRuntime, model_config: Dict[str, Any]) -> None:  # type: ignore
     """Create agents for a chess game and return the group chat."""
 
     def get_legal_moves(role_type: Annotated[str, "Role type: white or black"]) -> str:
@@ -279,14 +278,15 @@ async def chess_game(typ: str , runtime: AgentRuntime, model_config: Dict[str, A
             model_client=model_client,
             model_context=BufferedChatCompletionContext(buffer_size=1),
             tool_schema=[tool.schema for tool in chess_tools],
-            tool_agent_type=tool_agent_type,
+            tool_agent_type=tool_agent,
         ),
+        skip_direct_message_subscription = True
     )
 
 
 from aip_chain.chain import membase_chain, membase_id
 
-async def main(typ: str, model_config: Dict[str, Any]) -> None:
+async def main(typ: str, controller: str, model_config: Dict[str, Any]) -> None:
     """Main Entrypoint."""
 
     membase_chain.register(membase_id)
@@ -302,10 +302,12 @@ async def main(typ: str, model_config: Dict[str, Any]) -> None:
     runtime.add_message_serializer(try_get_known_serializers_for_type(TextMessage))
     await runtime.start()
 
+    await runtime.add_subscription(TypeSubscription(topic_type=membase_task_id, agent_type=membase_id))
+
     if typ == "board":
         await board_tool(runtime)
     else:
-        await chess_game(typ, runtime, model_config)
+        await chess_game(typ, controller, runtime, model_config)
 
     # Publish an initial message to trigger the group chat manager to start
     # orchestration.
@@ -330,6 +332,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--role", type=str, help="agent role: black, white or board", default="board"
     )
+    parser.add_argument(
+        "--control", type=str, help="agent board control", default="board_starter"
+    )
 
     args = parser.parse_args()
     if args.verbose:
@@ -342,4 +347,4 @@ if __name__ == "__main__":
     with open(args.model_config, "r") as f:
         model_config = yaml.safe_load(f)
 
-    asyncio.run(main(args.role, model_config))
+    asyncio.run(main(args.role, args.control , model_config))
