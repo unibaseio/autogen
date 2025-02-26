@@ -70,6 +70,7 @@ class PlayerAgent(RoutedAgent):
         self._tool_schema = tool_schema
         self._tool_agent_id = AgentId(tool_agent_type, self.id.key)
         self._model_context = model_context
+        print(f"=== start agent: {self.id}")
 
     @message_handler
     async def handle_message(self, message: TextMessage, ctx: MessageContext) -> None:
@@ -100,7 +101,7 @@ class PlayerAgent(RoutedAgent):
         
         # Publish the final response.
         assert isinstance(messages[-1].content, str)
-        await self.publish_message(TextMessage(content=messages[-1].content, source=self.id.type), DefaultTopicId(type=membase_task_id))
+        await self.publish_message(TextMessage(content=messages[-1].content, source=self.id.type), DefaultTopicId(type=membase_task_id, source=membase_task_id))
 
 
 def validate_turn(board: Board, player: Literal["white", "black"]) -> str:
@@ -228,6 +229,7 @@ async def board_tool(runtime: AgentRuntime) -> None:  # type: ignore
         runtime,
         tool_agent_type,
         lambda: ToolAgent(description="Tool agent for chess game.", tools=chess_tools),
+        skip_direct_message_subscription=True,
     )
 
 async def chess_game(typ: str, tool_agent: str, runtime: AgentRuntime, model_config: Dict[str, Any]) -> None:  # type: ignore
@@ -317,7 +319,7 @@ async def main(typ: str, controller: str, model_config: Dict[str, Any]) -> None:
 
         await runtime.send_message(
             TextMessage(content="Game started, white player your move.", source="System"),
-            AgentId(rolename, "default"),
+            AgentId(rolename, membase_task_id),
         )
     
     await runtime.stop_when_signal()
