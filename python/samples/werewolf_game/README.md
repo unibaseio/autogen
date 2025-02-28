@@ -7,7 +7,7 @@ An example werewolves game.
 First, you need a shell with AutoGen core and required dependencies installed.
 
 ```bash
-pip install "autogen-agentchat" "chess"
+pip install "autogen-agentchat"
 cd python/packages/autogen-core
 pip install -e .
 cd python/packages/autogen-ext
@@ -41,12 +41,12 @@ export MEMBASE_ACCOUNT="<membase account>"
 export MEMBASE_SECRET_KEY="<membase secret key>"
 python main.py --verbose
 
-# start six player
+# start six player, run six times
 export MEMBASE_ID="<membase uuid>"
 export MEMBASE_TASK_ID="<this task uuid>"
 export MEMBASE_ACCOUNT="<membase account>"
 export MEMBASE_SECRET_KEY="<membase secret key>"
-python role.py --verbose --role=black --moderator=<moderator membase_id>
+python role.py --verbose --moderator=<moderator membase_id>
 
 
 # game begins
