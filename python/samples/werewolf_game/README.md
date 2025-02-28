@@ -1,4 +1,4 @@
-# Chess Game Example
+# Werewoves Game Example
 
 An example werewolves game.
 
