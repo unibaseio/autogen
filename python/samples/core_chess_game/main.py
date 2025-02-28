@@ -229,7 +229,6 @@ async def board_tool(runtime: AgentRuntime) -> None:  # type: ignore
         runtime,
         tool_agent_type,
         lambda: ToolAgent(description="Tool agent for chess game.", tools=chess_tools),
-        skip_direct_message_subscription=True,
     )
 
 async def chess_game(typ: str, tool_agent: str, runtime: AgentRuntime, model_config: Dict[str, Any]) -> None:  # type: ignore
@@ -282,7 +281,6 @@ async def chess_game(typ: str, tool_agent: str, runtime: AgentRuntime, model_con
             tool_schema=[tool.schema for tool in chess_tools],
             tool_agent_type=tool_agent,
         ),
-        skip_direct_message_subscription = True
     )
 
 

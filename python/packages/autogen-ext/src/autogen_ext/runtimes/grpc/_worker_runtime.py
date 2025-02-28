@@ -263,7 +263,8 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
         self._running = False
         self._pending_requests: Dict[str, Future[Any]] = {}
         self._pending_requests_lock = asyncio.Lock()
-        self._next_request_id = 0
+        self._next_request_id = int(uuid.uuid4().hex[:8], 16) # Use first 8 hex digits of UUID
+        print(f"Generated request ID: {self._next_request_id}")
         self._host_connection: HostConnection | None = None
         self._background_tasks: Set[Task[Any]] = set()
         self._subscription_manager = SubscriptionManager()

@@ -96,9 +96,14 @@ class Client:
         agent_address = self.membase.functions.getAgent(_uuid).call()
         if agent_address == ADDRESS_ZERO:
             raise Exception(f"{_uuid} is not registered")
-        
+    
         if agent_address == self.wallet_address:
             return True
+        
+        to_address = self.membase.functions.getAgent(_auuid).call()
+        if agent_address == to_address:
+            return True
+
         return self.membase.functions.getPermission(_uuid, _auuid).call()
 
     def _display_cause(self, tx_hash: str):
