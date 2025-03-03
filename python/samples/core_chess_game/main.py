@@ -45,7 +45,7 @@ class TextMessage(BaseModel):
     content: str
 
 
-from aip_chain.chain import membase_chain, membase_id
+from aip_agent.chain.chain import membase_chain, membase_id
 import os
 membase_task_id = os.getenv('MEMBASE_TASK_ID')
 if not membase_task_id or membase_task_id == "":
@@ -284,7 +284,7 @@ async def chess_game(typ: str, tool_agent: str, runtime: AgentRuntime, model_con
     )
 
 
-from aip_chain.chain import membase_chain, membase_id
+from aip_agent.chain.chain import membase_chain, membase_id
 
 async def main(typ: str, controller: str, model_config: Dict[str, Any]) -> None:
     """Main Entrypoint."""

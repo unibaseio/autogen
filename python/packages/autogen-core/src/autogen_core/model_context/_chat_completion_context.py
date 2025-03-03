@@ -8,7 +8,7 @@ from ..models import LLMMessage
 
 import json
 import uuid
-from aip_hub.hub import hub_client
+from aip_agent.hub.hub import hub_client
 
 import os
 from dotenv import load_dotenv

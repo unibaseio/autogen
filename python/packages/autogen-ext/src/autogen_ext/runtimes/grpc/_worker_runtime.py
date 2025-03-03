@@ -123,8 +123,8 @@ class HostConnection:
         self._stub: AgentRpcAsyncStub = stub
         self._client_id = str(uuid.uuid4())
 
-        from aip_auth.auth import buy_auth_onchain, create_auth
-        from aip_chain.chain import membase_id
+        from aip_agent.auth.auth import buy_auth_onchain, create_auth
+        from aip_agent.chain.chain import membase_id
         import time
         import os
 

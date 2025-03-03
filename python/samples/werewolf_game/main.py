@@ -25,7 +25,7 @@ from autogen_ext.runtimes.grpc import GrpcWorkerAgentRuntime
 
 from common import TextMessage, Player
 
-from aip_chain.chain import membase_chain, membase_id
+from aip_agent.chain.chain import membase_chain, membase_id
 import os
 membase_task_id = os.getenv('MEMBASE_TASK_ID')
 if not membase_task_id or membase_task_id == "":
@@ -92,6 +92,8 @@ class WolfGame:
         for player in self.players:
             if player.name.lower() == name.lower():
                player.state = "dead"
+               return player.name
+        return ""
 
     def check_win(self):
         wolf_cnt = 0
@@ -351,10 +353,12 @@ async def main() -> None:
         # Update player states after night actions
         deads = []
         if dead_player != "":
-            game.mark_dead(dead_player)
+            dead_player = game.mark_dead(dead_player)
+        if dead_player != "":    
             deads.append(dead_player)
         if poison_player != "":
-            game.mark_dead(poison_player)
+            poison_player = game.mark_dead(poison_player)
+        if poison_player != "":
             deads.append(poison_player)
         
         # Check win conditions
@@ -365,7 +369,6 @@ async def main() -> None:
             await game.broadcast(msg)
             break
             
-       
         # Announce night phase results
         if len(deads) == 0:
             content = "The day is coming, all the players open your eyes. Last night is peaceful, no player is eliminated."
