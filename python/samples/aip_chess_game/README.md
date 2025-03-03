@@ -7,12 +7,11 @@ An example with two chess player agents that executes its own tools to demonstra
 First, you need a shell with AutoGen core and required dependencies installed.
 
 ```bash
-pip install "autogen-agentchat" "chess"
+pip install git+https://github.com/unibaseio/aip-agent.git
+pip install "chess"
 cd python/packages/autogen-core
 pip install -e .
 cd python/packages/autogen-ext
-pip install -e .
-cd python/packages/autogen-aip
 pip install -e .
 ```
 

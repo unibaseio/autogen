@@ -7,12 +7,10 @@ An example werewolves game.
 First, you need a shell with AutoGen core and required dependencies installed.
 
 ```bash
-pip install "autogen-agentchat"
+pip install git+https://github.com/unibaseio/aip-agent.git
 cd python/packages/autogen-core
 pip install -e .
 cd python/packages/autogen-ext
-pip install -e .
-cd python/packages/autogen-aip
 pip install -e .
 ```
 
