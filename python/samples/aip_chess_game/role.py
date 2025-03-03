@@ -14,7 +14,7 @@ from autogen_core import (
     try_get_known_serializers_for_type,
     message_handler,
 )
-from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
+
 from autogen_core.models import (
     ChatCompletionClient,
     LLMMessage,
@@ -24,8 +24,11 @@ from autogen_core.models import (
 )
 from autogen_ext.runtimes.grpc import GrpcWorkerAgentRuntime
 
+from aip_agent.memory.message import Message
+from aip_agent.memory.buffered_memory import BufferedMemory
+
 from common import TextMessage
-from prompt import get_game_prompt, get_response_format
+from prompt import get_game_prompt
 
 class PlayerAgent(RoutedAgent):
     def __init__(
@@ -33,56 +36,36 @@ class PlayerAgent(RoutedAgent):
         description: str,
         instructions: str,
         model_client: ChatCompletionClient,
-        model_context: ChatCompletionContext,
         role_type: str,
     ) -> None:
         super().__init__(description=description)
         self._system_messages: List[LLMMessage] = [SystemMessage(content=instructions)]
         self._model_client = model_client
-        self._model_context = model_context
         self._notice_messages: List[LLMMessage] = []
         self._important_info: LLMMessage = None
-        self.role_type = role_type
-        print(f"=== start agent: {self.id}, role: {self.role_type}")
+        self._memory = BufferedMemory(persistence_in_remote=True)
+        self._role_type = role_type
+        print(f"=== start agent: {self.id}, role: {self._role_type}")
 
     @message_handler
     async def handle_message(self, message: TextMessage, ctx: MessageContext) -> TextMessage:
         """Handle incoming messages based on their type."""
     
         user_message = UserMessage(content=message.content, source=message.source)
-        await self._model_context.add_message(user_message)
 
-        # For notice messages, only add to context without processing
-        if message.type == "system_notice":
-            self._notice_messages.append(user_message)
-            # Process response
-            if "Game over" in message.content:
-                print(message.content)
-            return TextMessage(type="response", content="", source=self.id.type)
-        
-        if message.type == "important_info":
-            self._important_info = user_message
-            return TextMessage(type="response", content="", source=self.id.type)
+        msg = Message(content=message.content, role="user", name=message.source)
+        self._memory.add(msg)
 
-        # self._notice_messages: List[LLMMessage] = []
-        # Get role-specific game prompt and response format
-        game_prompt = get_game_prompt(self._id.type, self.role_type)
-        response_format = get_response_format(message.type)
-        
-        # Combine prompts with the current message
-        if self._important_info:
-            system_prompt = f"{game_prompt}\n\n{self._important_info.content}\n\n{response_format}"
-        else:
-            system_prompt = f"{game_prompt}\n\n{response_format}"
+        system_prompt = get_game_prompt(self._role_type)
             
         self._system_messages = [SystemMessage(content=system_prompt)]
         
         # Get LLM response
-        input_messages = self._system_messages + self._notice_messages + [user_message]
+        input_messages = self._system_messages + [user_message]
         response = await self._model_client.create(input_messages)
 
-        # Add response to context and return
-        await self._model_context.add_message(AssistantMessage(content=response.content, source="assistant"))
+        # Add response to memory and return
+        self._memory.add(Message(content=response.content, role="assistant", name=self.id.type))
         return TextMessage(type="response", content=response.content, source=self.id.type)
 
 from aip_agent.chain.chain import membase_chain, membase_id
@@ -93,7 +76,6 @@ if not membase_task_id or membase_task_id == "":
     raise Exception("'MEMBASE_TASK_ID' is not set, user defined")
 
 async def main(moderator_id: str, model_config: Dict[str, Any]) -> None:
-
     membase_chain.register(membase_id)
     print(f"{membase_id} is register onchain")
     time.sleep(3)
@@ -108,7 +90,7 @@ async def main(moderator_id: str, model_config: Dict[str, Any]) -> None:
     await runtime.start()
 
     role_msg = await runtime.send_message(
-        TextMessage(type="register",content="join werewolf game", source=membase_id),
+        TextMessage(type="register",content="join chess game", source=membase_id),
         AgentId(moderator_id, membase_task_id),
         sender=AgentId(membase_id, membase_task_id)
     )
@@ -121,10 +103,9 @@ async def main(moderator_id: str, model_config: Dict[str, Any]) -> None:
         runtime,
         agentid,
         lambda: PlayerAgent(
-            description=f"You are player in werewolf game",
+            description=f"You are player in chess game",
             instructions=ins,
             model_client=model_client,
-            model_context=UnboundedChatCompletionContext(),
             role_type=role_type,
         ),
     )

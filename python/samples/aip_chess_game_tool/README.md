@@ -33,20 +33,29 @@ export MEMBASE_ACCOUNT="<membase account>"
 export MEMBASE_SECRET_KEY="<membase secret key>"
 python membase_hub.py
 
-
-# start game moderator, wait for palyers
+# start game board, wait for palyers
 export MEMBASE_ID="<membase uuid>"
 export MEMBASE_TASK_ID="<this task uuid>"
 export MEMBASE_ACCOUNT="<membase account>"
 export MEMBASE_SECRET_KEY="<membase secret key>"
-python main.py --verbose
+python main.py --verbose --role=board
 
-# start two player
+# start player black
 export MEMBASE_ID="<membase uuid>"
 export MEMBASE_TASK_ID="<this task uuid>"
 export MEMBASE_ACCOUNT="<membase account>"
 export MEMBASE_SECRET_KEY="<membase secret key>"
-python role.py --verbose --moderator=<moderator membase_id>
+python main.py --verbose --role=black --control=<board membase_id>
+
+# start player white
+export MEMBASE_ID="<membase uuid>"
+export MEMBASE_TASK_ID="<this task uuid>"
+export MEMBASE_ACCOUNT="<membase account>"
+export MEMBASE_SECRET_KEY="<membase secret key>"
+python main.py --verbose --role=white --control=<board membase_id>
+
+# start game
+> input white palyer membase_id
 
 # start web browser in localhost:5000, show chess board
 python app.py

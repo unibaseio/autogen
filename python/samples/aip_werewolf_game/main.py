@@ -212,7 +212,7 @@ class ModeratorAgent(RoutedAgent):
     @message_handler
     async def handle_message(self, message: TextMessage, ctx: MessageContext) -> TextMessage:
         """Handle incoming messages based on their type."""
-        print(f"handle message {message}")
+        logging.debug(f"handle message {message}")
         await self._model_context.add_message(UserMessage(content=message.content, source=message.source))
         # Handle registration
         if message.type == "register":
@@ -223,8 +223,6 @@ class ModeratorAgent(RoutedAgent):
                 content=playertype,
                 source=self.id.type
             )
-
-        print(f"handle message done")
 
 async def main() -> None:
     membase_chain.register(membase_id)
@@ -413,7 +411,7 @@ async def main() -> None:
             await game.broadcast(msg)
             break
 
-        return
+    await runtime.stop()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a werewolf game")
@@ -423,7 +421,7 @@ if __name__ == "__main__":
     if args.verbose:
         logging.basicConfig(level=logging.WARNING)
         logging.getLogger("autogen_core").setLevel(logging.DEBUG)
-        file_name = "wolf_game" + membase_id + ".log"
+        file_name = "wolf_game_" + membase_id + ".log"
         handler = logging.FileHandler(file_name)
         logging.getLogger("autogen_core").addHandler(handler)
 
