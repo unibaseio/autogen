@@ -35,6 +35,8 @@ python membase_hub.py
 
 
 # start game moderator, wait for palyers
+# moderator register and create task onchain
+# when game finish, moderator finish task, winner get the staking money
 export MEMBASE_ID="<membase uuid>"
 export MEMBASE_TASK_ID="<this task uuid>"
 export MEMBASE_ACCOUNT="<membase account>"
@@ -42,6 +44,7 @@ export MEMBASE_SECRET_KEY="<membase secret key>"
 python main.py --verbose
 
 # start two player
+# player register and staking to join this task
 export MEMBASE_ID="<membase uuid>"
 export MEMBASE_TASK_ID="<this task uuid>"
 export MEMBASE_ACCOUNT="<membase account>"
