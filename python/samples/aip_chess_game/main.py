@@ -6,6 +6,7 @@ moves to the default topic."""
 import argparse
 import asyncio
 import logging
+import time
 import yaml
 from typing import Annotated, Any, Dict, List, Literal
 
@@ -18,7 +19,6 @@ from autogen_core import (
     FunctionCall,
     TypeSubscription,
     try_get_known_serializers_for_type,
-    default_subscription,
     message_handler,
 )
 from autogen_core.model_context import BufferedChatCompletionContext, ChatCompletionContext
@@ -34,7 +34,7 @@ from autogen_core.tools import FunctionTool, Tool, ToolSchema
 
 from autogen_ext.runtimes.grpc import GrpcWorkerAgentRuntime
 
-from chess import BLACK, SQUARE_NAMES, WHITE, Board, Move
+from chess import BLACK, SQUARE_NAMES, WHITE, Board, Move # type: ignore
 from chess import piece_name as get_piece_name
 from pydantic import BaseModel
 
@@ -51,8 +51,6 @@ membase_task_id = os.getenv('MEMBASE_TASK_ID')
 if not membase_task_id or membase_task_id == "":
     print("'MEMBASE_TASK_ID' is not set, user defined")
     raise Exception("'MEMBASE_TASK_ID' is not set, user defined")
-
-tool_agent_type = membase_id
 
 class PlayerAgent(RoutedAgent):
     def __init__(
@@ -225,6 +223,7 @@ async def board_tool(runtime: AgentRuntime) -> None:  # type: ignore
     ]
 
     # Register the agents.
+    tool_agent_type = membase_id
     await ToolAgent.register(
         runtime,
         tool_agent_type,
@@ -291,10 +290,16 @@ async def main(typ: str, controller: str, model_config: Dict[str, Any]) -> None:
 
     membase_chain.register(membase_id)
     print(f"{membase_id} is register onchain")
+    time.sleep(5)
 
     if typ == "board":
-        membase_chain.register(membase_task_id)
-        print(f"{membase_task_id} is register onchain")
+        membase_chain.createTask(membase_task_id, 1_000_000)
+        print(f"{membase_task_id} is create onchain")
+        time.sleep(5)
+    else:
+        membase_chain.joinTask(membase_task_id, membase_id)
+        print(f"{membase_id} is join {membase_task_id} onchain")
+        time.sleep(5)
 
     runtime = GrpcWorkerAgentRuntime('localhost:50060')
     runtime.add_message_serializer(try_get_known_serializers_for_type(FunctionCall))

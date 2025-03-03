@@ -231,8 +231,8 @@ async def main() -> None:
     print(f"{membase_id} is register onchain")
     time.sleep(3)
    
-    membase_chain.register(membase_task_id)
-    print(f"{membase_task_id} is register onchain")
+    membase_chain.createTask(membase_task_id, 1_000_000)
+    print(f"task: {membase_task_id} is register onchain")
     time.sleep(3)
     
     # start the game

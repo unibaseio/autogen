@@ -7,6 +7,8 @@ import logging
 import signal
 import uuid
 import warnings
+import time
+import os
 from asyncio import Future, Task
 from collections import defaultdict
 from typing import (
@@ -91,6 +93,8 @@ class QueueAsyncIterable(AsyncIterator[Any], AsyncIterable[Any]):
     def __aiter__(self) -> AsyncIterator[Any]:
         return self
 
+from aip_agent.auth.auth import create_auth
+from aip_agent.chain.chain import membase_id
 
 class HostConnection:
     DEFAULT_GRPC_CONFIG: ClassVar[ChannelArgumentType] = [
@@ -121,19 +125,13 @@ class HostConnection:
         self._recv_queue = asyncio.Queue[agent_worker_pb2.Message]()
         self._connection_task: Task[None] | None = None
         self._stub: AgentRpcAsyncStub = stub
-        self._client_id = str(uuid.uuid4())
-
-        from aip_agent.auth.auth import buy_auth_onchain, create_auth
-        from aip_agent.chain.chain import membase_id
-        import time
-        import os
+        self._client_id = str(uuid.uuid4())   
 
         membase_task_id = os.getenv('MEMBASE_TASK_ID')
         if not membase_task_id or membase_task_id == "":
             print("'MEMBASE_TASK_ID' is not set, user defined")
             raise Exception("'MEMBASE_TASK_ID' is not set, user defined")
 
-        buy_auth_onchain(membase_task_id)
         timestamp = int(time.time())
         self._time = str(timestamp)
         signature = create_auth(timestamp)
@@ -147,6 +145,11 @@ class HostConnection:
 
     @property
     def metadata(self) -> Sequence[Tuple[str, str]]:
+        timestamp = int(time.time())
+        if timestamp - int(self._time) > 180: 
+            self._time = str(timestamp)
+            signature = create_auth(timestamp)
+            self._sign = signature
         return [("client-id", self._client_id), ("sign", self._sign), ("timestamp", self._time), ("agent", self._membase_id), ("task", self._task_id)]
 
     @classmethod

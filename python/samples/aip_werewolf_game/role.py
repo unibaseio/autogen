@@ -97,6 +97,10 @@ async def main(moderator_id: str, model_config: Dict[str, Any]) -> None:
     membase_chain.register(membase_id)
     print(f"{membase_id} is register onchain")
     time.sleep(3)
+
+    membase_chain.joinTask(membase_task_id, membase_id)
+    print(f"{membase_id} join task {membase_task_id} onchain")
+    time.sleep(3)
     
     # start the game
     runtime = GrpcWorkerAgentRuntime('localhost:50060')
