@@ -25,7 +25,7 @@ from autogen_ext.runtimes.grpc import GrpcWorkerAgentRuntime
 
 from common import TextMessage, Player
 
-from aip_agent.chain.chain import membase_chain, membase_id
+from membase.chain.chain import membase_chain, membase_id
 import os
 membase_task_id = os.getenv('MEMBASE_TASK_ID')
 if not membase_task_id or membase_task_id == "":

@@ -37,10 +37,10 @@ class TextMessage(BaseModel):
     source: str
     content: str
 
-from aip_agent.chain.chain import membase_chain, membase_id
-from aip_agent.memory.message import Message
-from aip_agent.memory.memory import MemoryBase
-from aip_agent.memory.buffered_memory import BufferedMemory
+from membase.chain.chain import membase_chain, membase_id
+from membase.memory.message import Message
+from membase.memory.memory import MemoryBase
+from membase.memory.buffered_memory import BufferedMemory
 
 import os
 membase_task_id = os.getenv('MEMBASE_TASK_ID')

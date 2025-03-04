@@ -2,6 +2,8 @@ def get_game_prompt(player_role: str) -> str:
     """Get the game prompt for the player role."""  
 
     prompt = "You are a chess player and you play as: " + player_role + "\n"
+    prompt += "You are playing against another player, you need to make the best move to win the game.\n"
+    prompt += "You can choose a move from the possible moves.\n"
     prompt += "Please respond with your move in the following format:\n"
     prompt += "thinking: [your detailed thought process]\n"
     prompt += "move: [your move in UCI format (e.g. e2e4, g1f3)]\n"

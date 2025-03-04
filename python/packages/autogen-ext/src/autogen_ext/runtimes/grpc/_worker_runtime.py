@@ -93,8 +93,8 @@ class QueueAsyncIterable(AsyncIterator[Any], AsyncIterable[Any]):
     def __aiter__(self) -> AsyncIterator[Any]:
         return self
 
-from aip_agent.auth.auth import create_auth
-from aip_agent.chain.chain import membase_id
+from membase.auth import create_auth
+from membase.chain.chain import membase_id
 
 class HostConnection:
     DEFAULT_GRPC_CONFIG: ClassVar[ChannelArgumentType] = [
@@ -267,7 +267,7 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
         self._pending_requests: Dict[str, Future[Any]] = {}
         self._pending_requests_lock = asyncio.Lock()
         self._next_request_id = int(uuid.uuid4().hex[:8], 16) # Use first 8 hex digits of UUID
-        print(f"Generated request ID: {self._next_request_id}")
+        logger.info(f"Generated request ID: {self._next_request_id}")
         self._host_connection: HostConnection | None = None
         self._background_tasks: Set[Task[Any]] = set()
         self._subscription_manager = SubscriptionManager()
@@ -400,14 +400,14 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
         if self._host_connection is None:
             raise RuntimeError("Host connection is not set.")
         data_type = self._serialization_registry.type_name(message)
-        print(f"send message1: {data_type}")
+        logging.debug(f"send message1: {data_type}")
         with self._trace_helper.trace_block(
             "create", recipient, parent=None, extraAttributes={"message_type": data_type}
         ):
             # create a new future for the result
             future = asyncio.get_event_loop().create_future()
             request_id = await self._get_new_request_id()
-            print(f"send message2: {request_id}")
+            logging.debug(f"send message2: {request_id}")
             self._pending_requests[request_id] = future
             serialized_message = self._serialization_registry.serialize(
                 message, type_name=data_type, data_content_type=JSON_DATA_CONTENT_TYPE
@@ -432,7 +432,6 @@ class GrpcWorkerAgentRuntime(AgentRuntime):
             self._background_tasks.add(task)
             task.add_done_callback(self._raise_on_exception)
             task.add_done_callback(self._background_tasks.discard)
-            print(f"send message3: {request_id}")
             return await future
 
     async def publish_message(

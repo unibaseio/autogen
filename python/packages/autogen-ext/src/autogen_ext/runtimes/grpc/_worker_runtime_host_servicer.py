@@ -43,7 +43,7 @@ async def get_client_id_or_abort(context: grpc.aio.ServicerContext[Any, Any]) ->
 
     return client_id  # type: ignore
 
-from aip_agent.auth.auth import verify_auth
+from membase.auth import verify_auth
 
 async def verify_client(agent_id: str ,context: grpc.aio.ServicerContext[Any, Any]) -> str:  # type: ignore
     # The type hint on context.invocation_metadata() is incorrect.

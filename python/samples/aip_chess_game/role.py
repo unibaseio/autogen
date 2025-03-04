@@ -24,8 +24,8 @@ from autogen_core.models import (
 )
 from autogen_ext.runtimes.grpc import GrpcWorkerAgentRuntime
 
-from aip_agent.memory.message import Message
-from aip_agent.memory.buffered_memory import BufferedMemory
+from membase.memory.message import Message
+from membase.memory.buffered_memory import BufferedMemory
 
 from common import TextMessage
 from prompt import get_game_prompt
@@ -50,7 +50,8 @@ class PlayerAgent(RoutedAgent):
     @message_handler
     async def handle_message(self, message: TextMessage, ctx: MessageContext) -> TextMessage:
         """Handle incoming messages based on their type."""
-    
+
+        print(message)
         user_message = UserMessage(content=message.content, source=message.source)
 
         msg = Message(content=message.content, role="user", name=message.source)
@@ -64,11 +65,13 @@ class PlayerAgent(RoutedAgent):
         input_messages = self._system_messages + [user_message]
         response = await self._model_client.create(input_messages)
 
+        print(response.content)
+
         # Add response to memory and return
         self._memory.add(Message(content=response.content, role="assistant", name=self.id.type))
         return TextMessage(type="response", content=response.content, source=self.id.type)
 
-from aip_agent.chain.chain import membase_chain, membase_id
+from membase.chain.chain import membase_chain, membase_id
 import os
 membase_task_id = os.getenv('MEMBASE_TASK_ID')
 if not membase_task_id or membase_task_id == "":
