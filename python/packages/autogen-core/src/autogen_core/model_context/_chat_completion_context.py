@@ -8,7 +8,7 @@ from ..models import LLMMessage
 
 import json
 import uuid
-from membase.hub import hub_client
+from membase.storage.hub import hub_client
 
 import os
 from dotenv import load_dotenv
